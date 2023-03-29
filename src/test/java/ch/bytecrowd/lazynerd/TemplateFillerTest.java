@@ -1,21 +1,197 @@
 package ch.bytecrowd.lazynerd;
 
 import ch.bytecrowd.lazynerd.model.Book;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TemplateFillerTest {
 
-
-    public static void main(String[] args) {
-        System.out.println(EntityFieldStepper.generateEntityBoilerPlate(Book.class));
-    }
     public static final TemplateFiller TEMPLATE_FILLER = new TemplateFiller();
+
+    @Test
+    void testTemplateGenerationWithForLoop() {
+
+        var random = new SecureRandom();
+        var dummies = List.of(
+                new Dummy().name(UUID.randomUUID().toString()).age(random.nextInt()),
+                new Dummy().name(UUID.randomUUID().toString()).age(random.nextInt()),
+                new Dummy().name(UUID.randomUUID().toString()).age(random.nextInt()),
+                new Dummy().name(UUID.randomUUID().toString()).age(random.nextInt())
+        );
+        Map<String, Object> params = Map.of(
+                "dummies",
+                dummies,
+                "title", "MyTitle",
+                "dummy", new Dummy().name(UUID.randomUUID().toString()).age(random.nextInt())
+        );
+
+
+        String template = """
+                title: ${title}
+                
+                #forEach(dummies)
+                name: ${name}
+                #end
+                
+                #forEach(dummies)
+                age: ${age}
+                #end
+                """;
+        String generated = new TemplateFiller().fillUpTemplate(template, () -> params);
+        assertThat(generated).isEqualTo(
+                String.format("""
+                        title: MyTitle
+                                                
+                        name: %s
+                        name: %s
+                        name: %s
+                        name: %s
+                                                
+                        age: %d
+                        age: %d
+                        age: %d
+                        age: %d
+                        """,
+                        dummies.get(0).getName(),
+                        dummies.get(1).getName(),
+                        dummies.get(2).getName(),
+                        dummies.get(3).getName(),
+                        dummies.get(0).getAge(),
+                        dummies.get(1).getAge(),
+                        dummies.get(2).getAge(),
+                        dummies.get(3).getAge())
+        );
+    }
+    @Test
+    void testTemplateGenerationWithNestedForLoop() {
+
+        var random = new SecureRandom();
+        var dummies = List.of(
+                new Dummy().name(UUID.randomUUID().toString()).age(random.nextInt()),
+                new Dummy().name(UUID.randomUUID().toString()).age(random.nextInt()),
+                new Dummy().name(UUID.randomUUID().toString()).age(random.nextInt()),
+                new Dummy().name(UUID.randomUUID().toString()).age(random.nextInt())
+        );
+        Map<String, Object> params = Map.of(
+                "dummies",
+                dummies,
+                "title", "MyTitle",
+                "dummy", new Dummy().name(UUID.randomUUID().toString()).age(random.nextInt())
+        );
+
+
+        String template = """
+                #forEach(dummies)
+                name: ${name}
+                    #forEach(dummies)
+                    age: ${age}
+                    #end
+                #end
+                """;
+
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new TemplateFiller().fillUpTemplate(template, () -> params));
+    }
+
+    @Test
+    void testTemplateGenerationWithForLoopWhenNoCollection() {
+        Map<String, Object> params = Map.of(
+                "title", "MyTitle"
+        );
+
+        String template = """
+                #forEach(title)
+                #end
+                """;
+
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new TemplateFiller().fillUpTemplate(template, () -> params));
+    }
+
+    @Test
+    void testGetterSetterEqualsAndHashCodeGeneration() {
+        String getterSetterEqualsAndHashCode = generateGetterSetterEqualsAndHashCode(Book.class);
+        assertThat(getterSetterEqualsAndHashCode)
+                .isEqualTo(
+                        """
+                                    public UUID getId() {
+                                        return id;
+                                    }
+                                                                
+                                    public void setId(UUID id) {
+                                        this.id = id;
+                                    }
+                                                                
+                                    public Book id(UUID id) {
+                                        setId(id);
+                                        return this;
+                                    }
+                                                                
+                                    public String getTitle() {
+                                        return title;
+                                    }
+                                                                
+                                    public void setTitle(String title) {
+                                        this.title = title;
+                                    }
+                                                                
+                                    public Book title(String title) {
+                                        setTitle(title);
+                                        return this;
+                                    }
+                                                                
+                                    public List<Author> getAuthors() {
+                                        return authors;
+                                    }
+                                                                
+                                    public void setAuthors(List<Author> authors) {
+                                        this.authors = authors;
+                                    }
+                                                                
+                                    public Book authors(List<Author> authors) {
+                                        setAuthors(authors);
+                                        return this;
+                                    }
+                                                                
+                                    public Category getCategory() {
+                                        return category;
+                                    }
+                                                                
+                                    public void setCategory(Category category) {
+                                        this.category = category;
+                                    }
+                                                                
+                                    public Book category(Category category) {
+                                        setCategory(category);
+                                        return this;
+                                    }
+                                                                
+                                    @Override
+                                    public boolean equals(Object o) {
+                                        if (this == o) return true;
+                                        if (o == null || getClass() != o.getClass()) return false;
+                                        Book entity = (Book) o;
+                                        return Objects.equals(id, entity.id);
+                                    }
+                                                                
+                                    /**
+                                    https://vladmihalcea.com/how-to-implement-equals-and-hashcode-using-the-jpa-entity-identifier/
+                                    */
+                                    @Override
+                                    public int hashCode() {
+                                        return getClass().hashCode();
+                                    }
+                                """
+                );
+    }
 
     @Test
     void testRepositoryGeneration() {
@@ -267,5 +443,65 @@ class TemplateFillerTest {
                 Templates.QUARKUS_REST_RESOURCE,
                 () -> ParamProvider.paramsFromEntity(clazz)
         );
+    }
+
+    public static String generateGetterSetterEqualsAndHashCode(Class clazz) {
+        return TEMPLATE_FILLER.fillUpTemplate(
+                Templates.GETTER_SETTER_EQUALS_AND_HASH_CODE,
+                () -> ParamProvider.paramsFromEntity(clazz)
+        );
+    }
+}
+
+class Dummy {
+    private String name;
+    private Integer age;
+    private List<Integer> numbers;
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Dummy name(String name) {
+        setName(name);
+        return this;
+    }
+
+    public Integer getAge() {
+        return age;
+    }
+
+    public void setAge(Integer age) {
+        this.age = age;
+    }
+
+    public Dummy age(Integer age) {
+        setAge(age);
+        return this;
+    }
+
+    public List<Integer> getNumbers() {
+        return numbers;
+    }
+
+    public void setNumbers(List<Integer> numbers) {
+        this.numbers = numbers;
+    }
+
+    public Dummy numbers(List<Integer> numbers) {
+        setNumbers(numbers);
+        return this;
+    }
+
+    @Override
+    public String toString() {
+        return "Dummy{" +
+                "name='" + name + '\'' +
+                ", age=" + age +
+                '}';
     }
 }

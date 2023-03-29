@@ -2,6 +2,38 @@ package ch.bytecrowd.lazynerd;
 
 public class Templates {
 
+    public static final String GETTER_SETTER_EQUALS_AND_HASH_CODE = """
+            #forEach(entityTypeFields)
+                public ${fieldType} get${fieldNamePascalCase}() {
+                    return ${fieldName};
+                }
+                
+                public void set${fieldNamePascalCase}(${fieldType} ${fieldName}) {
+                    this.${fieldName} = ${fieldName};
+                }
+                
+                public ${entityTypeSimpleName} ${fieldName}(${fieldType} ${fieldName}) {
+                    set${fieldNamePascalCase}(${fieldName});
+                    return this;
+                }
+                
+            #end
+                @Override
+                public boolean equals(Object o) {
+                    if (this == o) return true;
+                    if (o == null || getClass() != o.getClass()) return false;
+                    ${entityTypeSimpleName} entity = (${entityTypeSimpleName}) o;
+                    return Objects.equals(id, entity.id);
+                }
+                            
+                /**
+                https://vladmihalcea.com/how-to-implement-equals-and-hashcode-using-the-jpa-entity-identifier/
+                */
+                @Override
+                public int hashCode() {
+                    return getClass().hashCode();
+                }
+            """;
     public static final String QUARKUS_REPOSITORY= """
                 package ${basePackage}.repository;
                 

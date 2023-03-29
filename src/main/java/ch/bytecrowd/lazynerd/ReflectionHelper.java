@@ -3,7 +3,9 @@ package ch.bytecrowd.lazynerd;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 public final class ReflectionHelper {
@@ -12,9 +14,23 @@ public final class ReflectionHelper {
 
     }
 
+    public static HashMap<String, Function<Object, Object>> getFieldsMap(Class<?> clazz) {
+        var fields = Arrays.asList(clazz.getDeclaredFields());
+        var fieldsMap = new HashMap<String, Function<Object, Object>>();
+        fields.forEach(field -> fieldsMap.put(field.getName(), o -> {
+            try {
+                field.setAccessible(true);
+                return field.get(o);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        }));
+        return fieldsMap;
+    }
+
     public static String getParentPackageName(Class clazz) {
-        String entityPackageName = clazz.getPackageName();
-        String basePackage = entityPackageName.substring(0, entityPackageName.lastIndexOf("."));
+        var entityPackageName = clazz.getPackageName();
+        var basePackage = entityPackageName.substring(0, entityPackageName.lastIndexOf("."));
         return entityPackageName.equals(basePackage) ? "" : basePackage;
     }
 
