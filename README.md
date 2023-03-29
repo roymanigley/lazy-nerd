@@ -47,63 +47,140 @@ public class Book {
     private Category category;
 }
 ```
-3. generate boilerplate for your entity class (`getter`, `setter`, `builder`, `equals` and `hashCode`)
+3. generate CRUD boilerplate for your entity class (`Repository`, `Service`, `ServiceImpl`, `RestController`)
 ```java
 public static void main(String[] args){
-        String generated = EntityFieldStepper.generateEntityBoilerPlate(Book);
-}
-```
-4. generate CRUD boilerplate for your entity class (`Repository`, `Service`, `ServiceImpl`, `RestController`)
-```java
-public static void main(String[] args){
+        var clazz = Book.class;
+        var filler = new TemplateFiller();
         // Generate as String
-        String generatedRepopsitory = new TemplateFiller().fillUpTemplate(
+        var generatedGetterSetterEqualsAndHashCode = filler.fillUpTemplate(
+            Templates.GETTER_SETTER_EQUALS_AND_HASH_CODE,
+            () -> ParamProvider.paramsFromEntity(clazz)
+        );
+
+        var generatedRepopsitory = filler.fillUpTemplate(
             Templates.QUARKUS_REPOSITORY,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
 
-        String generatedService = new TemplateFiller().fillUpTemplate(
+        var generatedService = filler.fillUpTemplate(
             Templates.QUARKUS_SERVICE,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
 
-        String generatedServiceImpl = new TemplateFiller().fillUpTemplate(
+        var generatedServiceImpl = filler.fillUpTemplate(
             Templates.QUARKUS_SERVICE_IMPL,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
 
-        String generatedRestController = new TemplateFiller().fillUpTemplate(
+        var generatedRestController = filler.fillUpTemplate(
             Templates.QUARKUS_REST_RESOURCE,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
         
         // Generate to file
-        String generatedRepopsitory = new TemplateFiller().fillUpTemplateAndWriteToFile(
-            "/tmp/ch/bytecrowd/lazynerd/repository",
+        filler.fillUpTemplateAndWriteToFile(
+            "/tmp/ch/bytecrowd/lazynerd/domain/" + clazz.getSimpleName() + ".java",
+            Templates.GETTER_SETTER_EQUALS_AND_HASH_CODE,
+            () -> ParamProvider.paramsFromEntity(clazz)
+        );
+        
+        filler.fillUpTemplateAndWriteToFile(
+            "/tmp/ch/bytecrowd/lazynerd/repository/" + clazz.getSimpleName() + "Repository.java",
             Templates.QUARKUS_REPOSITORY,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
 
-        String generatedService = new TemplateFiller().fillUpTemplateAndWriteToFile(
-            "/tmp/ch/bytecrowd/lazynerd/service",
+        filler.fillUpTemplateAndWriteToFile(
+            "/tmp/ch/bytecrowd/lazynerd/service/" + clazz.getSimpleName() + "Service.java",
             Templates.QUARKUS_SERVICE,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
 
-        String generatedServiceImpl = new TemplateFiller().fillUpTemplateAndWriteToFile(
-            "/tmp/ch/bytecrowd/lazynerd/service/impl",
+        filler.fillUpTemplateAndWriteToFile(
+            "/tmp/ch/bytecrowd/lazynerd/service/impl/" + clazz.getSimpleName() + "ServiceImpl.java",
             Templates.QUARKUS_SERVICE_IMPL,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
 
-        String generatedRestController = new TemplateFiller().fillUpTemplateAndWriteToFile(
-            "/tmp/ch/bytecrowd/lazynerd/web/rest",
+        filler.fillUpTemplateAndWriteToFile(
+            "/tmp/ch/bytecrowd/lazynerd/web/rest/" + clazz.getSimpleName() + "Resource.java",
             Templates.QUARKUS_REST_RESOURCE,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
 }
 ```
 ### Output
+```java
+    public UUID getId() {
+        return id;
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    public Book id(UUID id) {
+        setId(id);
+        return this;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public Book title(String title) {
+        setTitle(title);
+        return this;
+    }
+
+    public List<Author> getAuthors() {
+        return authors;
+    }
+
+    public void setAuthors(List<Author> authors) {
+        this.authors = authors;
+    }
+
+    public Book authors(List<Author> authors) {
+        setAuthors(authors);
+        return this;
+    }
+
+    public Category getCategory() {
+        return category;
+    }
+
+    public void setCategory(Category category) {
+        this.category = category;
+    }
+
+    public Book category(Category category) {
+        setCategory(category);
+        return this;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Book entity = (Book) o;
+        return Objects.equals(id, entity.id);
+    }
+
+    /**
+    https://vladmihalcea.com/how-to-implement-equals-and-hashcode-using-the-jpa-entity-identifier/
+    */
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+```
+
 ```java
 package ch.bytecrowd.lazynerd.repository;
 
