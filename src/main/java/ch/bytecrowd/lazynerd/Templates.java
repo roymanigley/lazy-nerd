@@ -35,15 +35,17 @@ public class Templates {
                 }
             """;
     public static final String QUARKUS_REPOSITORY= """
-                package ${basePackage}.repository;
-                
-                import ${entityTypeCanonicalName};
-                import ${idTypeCanonicalName};
-                import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase;
-                
-                public class ${entityTypeSimpleName}Repository implements PanacheRepositoryBase<${entityTypeSimpleName}, ${idTypeSimpleName}> {
-                }
-                """;
+            package ${basePackage}.repository;
+                            
+            import ${entityTypeCanonicalName};
+            import ${idTypeCanonicalName};
+            import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase;
+            import javax.inject.Singleton;
+                            
+            @Singleton
+            public class ${entityTypeSimpleName}Repository implements PanacheRepositoryBase<${entityTypeSimpleName}, ${idTypeSimpleName}> {
+            }
+            """;
     public static final String QUARKUS_SERVICE= """
                 package ${basePackage}.service;
                 
@@ -52,65 +54,67 @@ public class Templates {
                 import io.smallrye.mutiny.Multi;
                 import io.smallrye.mutiny.Uni;
                 
-                public class ${entityTypeSimpleName}Service {
+                public interface ${entityTypeSimpleName}Service {
                     
-                    public Multi<${entityTypeSimpleName}> getAll();
+                    Multi<${entityTypeSimpleName}> getAll();
                                   
-                    public Uni<${entityTypeSimpleName}> findById(${idTypeSimpleName} id);
+                    Uni<${entityTypeSimpleName}> findById(${idTypeSimpleName} id);
                                   
-                    public Uni<${entityTypeSimpleName}> save(${entityTypeSimpleName} ${entityTypeVariableName});
+                    Uni<${entityTypeSimpleName}> save(${entityTypeSimpleName} ${entityTypeVariableName});
                                   
-                    public Uni<Boolean> delete(${idTypeSimpleName} id);
+                    Uni<Boolean> delete(${idTypeSimpleName} id);
                 }
                 """;
 
     public static final String QUARKUS_SERVICE_IMPL= """
-                package ${basePackage}.service.impl;
+            package ${basePackage}.service.impl;
+                            
+            import ${entityTypeCanonicalName};
+            import ${idTypeCanonicalName};
+            import ${basePackage}.repository.${entityTypeSimpleName}Repository;
+            import ${basePackage}.service.${entityTypeSimpleName}Service;
+            import io.quarkus.hibernate.reactive.panache.Panache;
+            import io.quarkus.hibernate.reactive.panache.common.runtime.ReactiveTransactional;
+            import io.smallrye.mutiny.Multi;
+            import io.smallrye.mutiny.Uni;
+            import javax.inject.Singleton;
+                            
+            @Singleton
+            public class ${entityTypeSimpleName}ServiceImpl implements ${entityTypeSimpleName}Service {
                 
-                import ${entityTypeCanonicalName};
-                import ${idTypeCanonicalName};
-                import ${basePackage}.repository.${entityTypeSimpleName}Repository;
-                import ${basePackage}.service.${entityTypeSimpleName}Service;
-                import io.quarkus.hibernate.reactive.panache.Panache;
-                import io.quarkus.hibernate.reactive.panache.common.runtime.ReactiveTransactional;
-                import io.smallrye.mutiny.Multi;
-                import io.smallrye.mutiny.Uni;
+                private final ${entityTypeSimpleName}Repository repository;
                 
-                public class ${entityTypeSimpleName}ServiceImpl implements ${entityTypeSimpleName}Service {
-                    
-                    private final ${entityTypeSimpleName}Repository repository;
-                    
-                    public ${entityTypeSimpleName}ServiceImpl(${entityTypeSimpleName}Repository repository) {
-                        this.repository = repository;
-                    }
-                    
-                    @Override
-                    public Multi<${entityTypeSimpleName}> getAll() {
-                        return repository.streamAll();
-                    }
-                                  
-                    @Override
-                    public Uni<${entityTypeSimpleName}> findById(${idTypeSimpleName} id) {
-                        return repository.findById(id);
-                    }
-                                  
-                    @Override
-                    @ReactiveTransactional
-                    public Uni<${entityTypeSimpleName}> save(${entityTypeSimpleName} ${entityTypeVariableName}) {
-                        if (${entityTypeVariableName}.getId() != null) {
-                            return Panache.getSession()
-                                    .chain(session -> session.merge(${entityTypeVariableName}));
-                        }
-                        return repository.persist(${entityTypeVariableName});
-                    }
-                                  
-                    @Override
-                    @ReactiveTransactional
-                    public Uni<Boolean> delete(${idTypeSimpleName} id) {
-                        return repository.deleteById(id);
-                    }
+                public ${entityTypeSimpleName}ServiceImpl(${entityTypeSimpleName}Repository repository) {
+                    this.repository = repository;
                 }
-                """;
+                
+                @Override
+                public Multi<${entityTypeSimpleName}> getAll() {
+                    return repository.streamAll();
+                }
+                              
+                @Override
+                public Uni<${entityTypeSimpleName}> findById(${idTypeSimpleName} id) {
+                    return repository.findById(id);
+                }
+                              
+                @Override
+                @ReactiveTransactional
+                public Uni<${entityTypeSimpleName}> save(${entityTypeSimpleName} ${entityTypeVariableName}) {
+                    if (${entityTypeVariableName}.getId() != null) {
+                        return Panache.getSession()
+                                .chain(session -> session.merge(${entityTypeVariableName}));
+                    }
+                    return repository.persist(${entityTypeVariableName});
+                }
+                              
+                @Override
+                @ReactiveTransactional
+                public Uni<Boolean> delete(${idTypeSimpleName} id) {
+                    return repository.deleteById(id);
+                }
+            }
+            """;
     public static final String QUARKUS_REST_RESOURCE = """
             package ${basePackage}.web.rest;
                         
@@ -123,7 +127,9 @@ public class Templates {
             import javax.ws.rs.*;
             import javax.ws.rs.core.Response;
             import java.net.URI;
+            import javax.inject.Singleton;
             
+            @Singleton
             @Path("/api/${entityRestResourceName}")
             public class ${entityTypeSimpleName}Resource {
                         
@@ -151,12 +157,7 @@ public class Templates {
                 @POST
                 public Uni<Response> create(${entityTypeSimpleName} ${entityTypeVariableName}) {
                     if (${entityTypeVariableName}.getId() != null) {
-                        return Uni.createFrom().item(() ->
-                                Response
-                                    .status(Response.Status.BAD_REQUEST)
-                                    .entity("ResourceExistsAlready")
-                                    .build()
-                        );
+                        throw new WebApplicationException("error.badrequest.alreadyexist", Response.Status.BAD_REQUEST);
                     } else {
                         return service.save(${entityTypeVariableName})
                                 .map(d -> Response
@@ -170,12 +171,7 @@ public class Templates {
                 @PUT
                 public Uni<Response> update(${entityTypeSimpleName} ${entityTypeVariableName}) {
                     if (${entityTypeVariableName}.getId() == null) {
-                        return Uni.createFrom().item(() ->
-                                Response
-                                    .status(Response.Status.BAD_REQUEST)
-                                    .entity("ResourceDoesNotExistsAlready")
-                                    .build()
-                        );
+                        throw new WebApplicationException("error.badrequest.notexist", Response.Status.BAD_REQUEST);
                     } else {
                         return service.save(${entityTypeVariableName})
                                 .map(d -> Response

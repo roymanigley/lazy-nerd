@@ -39,7 +39,7 @@ public class TemplateFiller {
         Files.writeString(
                 path,
                 fillUpTemplate(template, paramProvider),
-                StandardOpenOption.WRITE
+                StandardOpenOption.WRITE, StandardOpenOption.CREATE
         );
     }
 }

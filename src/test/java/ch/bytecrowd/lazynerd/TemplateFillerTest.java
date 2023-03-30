@@ -204,7 +204,9 @@ class TemplateFillerTest {
                                 import ch.bytecrowd.lazynerd.model.Book;
                                 import java.util.UUID;
                                 import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase;
-                                                        
+                                import javax.inject.Singleton;
+                                
+                                @Singleton
                                 public class BookRepository implements PanacheRepositoryBase<Book, UUID> {
                                 }
                                 """
@@ -224,7 +226,9 @@ class TemplateFillerTest {
                                 import ch.bytecrowd.lazynerd.model.Book;
                                 import java.util.UUID;
                                 import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase;
-                                                        
+                                import javax.inject.Singleton;
+                                
+                                @Singleton
                                 public class BookRepository implements PanacheRepositoryBase<Book, UUID> {
                                 }
                                 """
@@ -244,15 +248,15 @@ class TemplateFillerTest {
                                 import io.smallrye.mutiny.Multi;
                                 import io.smallrye.mutiny.Uni;
                                
-                                public class BookService {
+                                public interface BookService {
                                
-                                    public Multi<Book> getAll();
+                                    Multi<Book> getAll();
                                
-                                    public Uni<Book> findById(UUID id);
+                                    Uni<Book> findById(UUID id);
                                
-                                    public Uni<Book> save(Book book);
+                                    Uni<Book> save(Book book);
                                
-                                    public Uni<Boolean> delete(UUID id);
+                                    Uni<Boolean> delete(UUID id);
                                 }
                                 """
                 );
@@ -264,52 +268,54 @@ class TemplateFillerTest {
         assertThat(service)
                 .isEqualTo(
                         """
-                               package ch.bytecrowd.lazynerd.service.impl;
-                              
-                               import ch.bytecrowd.lazynerd.model.Book;
-                               import java.util.UUID;
-                               import ch.bytecrowd.lazynerd.repository.BookRepository;
-                               import ch.bytecrowd.lazynerd.service.BookService;
-                               import io.quarkus.hibernate.reactive.panache.Panache;
-                               import io.quarkus.hibernate.reactive.panache.common.runtime.ReactiveTransactional;
-                               import io.smallrye.mutiny.Multi;
-                               import io.smallrye.mutiny.Uni;
-                              
-                               public class BookServiceImpl implements BookService {
-                              
-                                   private final BookRepository repository;
-                              
-                                   public BookServiceImpl(BookRepository repository) {
-                                       this.repository = repository;
-                                   }
-                              
-                                   @Override
-                                   public Multi<Book> getAll() {
-                                       return repository.streamAll();
-                                   }
-                              
-                                   @Override
-                                   public Uni<Book> findById(UUID id) {
-                                       return repository.findById(id);
-                                   }
-                              
-                                   @Override
-                                   @ReactiveTransactional
-                                   public Uni<Book> save(Book book) {
-                                       if (book.getId() != null) {
-                                           return Panache.getSession()
-                                                   .chain(session -> session.merge(book));
-                                       }
-                                       return repository.persist(book);
-                                   }
-                              
-                                   @Override
-                                   @ReactiveTransactional
-                                   public Uni<Boolean> delete(UUID id) {
-                                       return repository.deleteById(id);
-                                   }
-                               }
-                                """
+                                package ch.bytecrowd.lazynerd.service.impl;
+                                                              
+                                import ch.bytecrowd.lazynerd.model.Book;
+                                import java.util.UUID;
+                                import ch.bytecrowd.lazynerd.repository.BookRepository;
+                                import ch.bytecrowd.lazynerd.service.BookService;
+                                import io.quarkus.hibernate.reactive.panache.Panache;
+                                import io.quarkus.hibernate.reactive.panache.common.runtime.ReactiveTransactional;
+                                import io.smallrye.mutiny.Multi;
+                                import io.smallrye.mutiny.Uni;
+                                import javax.inject.Singleton;
+                                
+                                @Singleton
+                                public class BookServiceImpl implements BookService {
+                                                              
+                                    private final BookRepository repository;
+                                                              
+                                    public BookServiceImpl(BookRepository repository) {
+                                        this.repository = repository;
+                                    }
+                                                              
+                                    @Override
+                                    public Multi<Book> getAll() {
+                                        return repository.streamAll();
+                                    }
+                                                              
+                                    @Override
+                                    public Uni<Book> findById(UUID id) {
+                                        return repository.findById(id);
+                                    }
+                                                              
+                                    @Override
+                                    @ReactiveTransactional
+                                    public Uni<Book> save(Book book) {
+                                        if (book.getId() != null) {
+                                            return Panache.getSession()
+                                                    .chain(session -> session.merge(book));
+                                        }
+                                        return repository.persist(book);
+                                    }
+                                                              
+                                    @Override
+                                    @ReactiveTransactional
+                                    public Uni<Boolean> delete(UUID id) {
+                                        return repository.deleteById(id);
+                                    }
+                                }
+                                 """
                 );
     }
 
@@ -331,7 +337,9 @@ class TemplateFillerTest {
                                 import javax.ws.rs.*;
                                 import javax.ws.rs.core.Response;
                                 import java.net.URI;
-                                                                
+                                import javax.inject.Singleton;
+                                
+                                @Singleton
                                 @Path("/api/book")
                                 public class BookResource {
                                                                 
@@ -359,12 +367,7 @@ class TemplateFillerTest {
                                     @POST
                                     public Uni<Response> create(Book book) {
                                         if (book.getId() != null) {
-                                            return Uni.createFrom().item(() ->
-                                                    Response
-                                                        .status(Response.Status.BAD_REQUEST)
-                                                        .entity("ResourceExistsAlready")
-                                                        .build()
-                                            );
+                                            throw new WebApplicationException("error.badrequest.alreadyexist", Response.Status.BAD_REQUEST);
                                         } else {
                                             return service.save(book)
                                                     .map(d -> Response
@@ -378,12 +381,7 @@ class TemplateFillerTest {
                                     @PUT
                                     public Uni<Response> update(Book book) {
                                         if (book.getId() == null) {
-                                            return Uni.createFrom().item(() ->
-                                                    Response
-                                                        .status(Response.Status.BAD_REQUEST)
-                                                        .entity("ResourceDoesNotExistsAlready")
-                                                        .build()
-                                            );
+                                            throw new WebApplicationException("error.badrequest.notexist", Response.Status.BAD_REQUEST);
                                         } else {
                                             return service.save(book)
                                                     .map(d -> Response
