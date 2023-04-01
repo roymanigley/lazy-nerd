@@ -23,6 +23,7 @@ public interface ParamProvider {
                 "fieldType", field.getType().getSimpleName() + (genericType.isBlank() ? "" : "<" + genericType + ">"),
                 "fieldName", field.getName(),
                 "fieldNamePascalCase", field.getName().substring(0, 1).toUpperCase() + field.getName().substring(1),
+                "fieldNameUpperCase", field.getName().replaceAll("(.)([A-Z])", "$1_$2").toUpperCase(),
                 "genericType", genericType,
                 "genericTypeVariable", genericTypeVariable
         );
@@ -33,6 +34,7 @@ public interface ParamProvider {
             String fieldType,
             String fieldName,
             String fieldNamePascalCase,
+            String fieldNameUpperCase,
             String genericType,
             String genericTypeVariable
     ) {
@@ -42,6 +44,7 @@ public interface ParamProvider {
                     map.get("fieldType") + "",
                     map.get("fieldName") + "",
                     map.get("fieldNamePascalCase") + "",
+                    map.get("fieldNameUpperCase") + "",
                     map.get("genericType") + "",
                     map.get("genericTypeVariable") + ""
             );

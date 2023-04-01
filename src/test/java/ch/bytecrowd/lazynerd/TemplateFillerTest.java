@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -72,6 +73,32 @@ class TemplateFillerTest {
                         dummies.get(3).getAge())
         );
     }
+
+    @Test
+    void testTemplateGenerationWithForLoopForEmptyList() {
+        Map<String, Object> params = Map.of(
+                "emptyList", Collections.emptyList(),
+                "title", "MyTitle"
+        );
+
+
+        String template = """
+                title: ${title}
+                
+                #forEach(emptyList)
+                name: ${name}
+                #end
+                """;
+        String generated = new TemplateFiller().fillUpTemplate(template, () -> params);
+        assertThat(generated).isEqualTo(
+                """
+                        title: MyTitle
+                               
+                               
+                        """
+        );
+    }
+
     @Test
     void testTemplateGenerationWithNestedForLoop() {
 
@@ -245,6 +272,7 @@ class TemplateFillerTest {
                                
                                 import ch.bytecrowd.lazynerd.model.Book;
                                 import java.util.UUID;
+                                import java.util.Optional;
                                 import io.smallrye.mutiny.Multi;
                                 import io.smallrye.mutiny.Uni;
                                
@@ -252,7 +280,7 @@ class TemplateFillerTest {
                                
                                     Multi<Book> getAll();
                                
-                                    Uni<Book> findById(UUID id);
+                                    Uni<Optional<Book>> findById(UUID id);
                                
                                     Uni<Book> save(Book book);
                                
@@ -272,6 +300,7 @@ class TemplateFillerTest {
                                                               
                                 import ch.bytecrowd.lazynerd.model.Book;
                                 import java.util.UUID;
+                                import java.util.Optional;
                                 import ch.bytecrowd.lazynerd.repository.BookRepository;
                                 import ch.bytecrowd.lazynerd.service.BookService;
                                 import io.quarkus.hibernate.reactive.panache.Panache;
@@ -295,7 +324,7 @@ class TemplateFillerTest {
                                     }
                                                               
                                     @Override
-                                    public Uni<Book> findById(UUID id) {
+                                    public Uni<Optional<Book>> findById(UUID id) {
                                         return repository.findById(id);
                                     }
                                                               
@@ -326,84 +355,457 @@ class TemplateFillerTest {
         assertThat(restController)
                 .isEqualTo(
                         """
-                                package ch.bytecrowd.lazynerd.web.rest;
-                                                                
-                                import ch.bytecrowd.lazynerd.model.Book;
-                                import java.util.UUID;
-                                import ch.bytecrowd.lazynerd.service.BookService;
-                                import io.smallrye.mutiny.Multi;
-                                import io.smallrye.mutiny.Uni;
-                                                                
-                                import javax.ws.rs.*;
-                                import javax.ws.rs.core.Response;
-                                import java.net.URI;
-                                import javax.inject.Singleton;
-                                
-                                @Singleton
-                                @Path("/api/book")
-                                public class BookResource {
-                                                                
-                                    private final BookService service;
-                                                                
-                                    public BookResource(BookService service) {
-                                        this.service = service;
-                                    }
-                                                                
-                                    @GET
-                                    public Multi<Book> findAll() {
-                                        return service.getAll();
-                                    }
-                                                                
-                                    @GET
-                                    @Path("/{id}")
-                                    public Uni<Response> findById(UUID id) {
-                                        return service.findById(id)
-                                                .map(d -> Response
-                                                        .ok(d)
-                                                        .build()
-                                                );
-                                    }
-                                                                
-                                    @POST
-                                    public Uni<Response> create(Book book) {
-                                        if (book.getId() != null) {
-                                            throw new WebApplicationException("error.badrequest.alreadyexist", Response.Status.BAD_REQUEST);
-                                        } else {
-                                            return service.save(book)
-                                                    .map(d -> Response
-                                                            .created(URI.create("/api/book/" + d.getId()))
-                                                            .entity(d)
-                                                            .build()
-                                                    );
-                                        }
-                                    }
-                                                                
-                                    @PUT
-                                    public Uni<Response> update(Book book) {
-                                        if (book.getId() == null) {
-                                            throw new WebApplicationException("error.badrequest.notexist", Response.Status.BAD_REQUEST);
-                                        } else {
-                                            return service.save(book)
-                                                    .map(d -> Response
-                                                            .ok(d)
-                                                            .build()
-                                                    );
-                                        }
-                                    }
-                                                                
-                                    @DELETE
-                                    @Path("/{id}")
-                                    public Uni<Response> delete(UUID id) {
-                                        return service.delete(id)
-                                                .map(aBoolean -> Response
-                                                        .accepted()
-                                                        .build()
-                                                );
-                                    }
-                                }
-                                """
+                             package ch.bytecrowd.lazynerd.web.rest;
+                             
+                             import ch.bytecrowd.lazynerd.model.Book;
+                             import java.util.UUID;
+                             import ch.bytecrowd.lazynerd.service.BookService;
+                             import io.smallrye.mutiny.Multi;
+                             import io.smallrye.mutiny.Uni;
+                             
+                             import javax.ws.rs.*;
+                             import javax.ws.rs.core.Response;
+                             import java.net.URI;
+                             import javax.inject.Singleton;
+                             
+                             @Singleton
+                             @Path("/api/book")
+                             public class BookResource {
+                             
+                                 private final BookService service;
+                             
+                                 public BookResource(BookService service) {
+                                     this.service = service;
+                                 }
+                             
+                                 @GET
+                                 public Multi<Book> findAll() {
+                                     return service.getAll();
+                                 }
+                             
+                                 @GET
+                                 @Path("/{id}")
+                                 public Uni<Response> findById(UUID id) {
+                                     return service.findById(id)
+                                             .map(optional -> optional
+                                                 .map(book -> Response
+                                                     .ok(book)
+                                                     .build()
+                                                 ).orElseGet(() -> Response
+                                                         .status(Response.Status.NOT_FOUND)
+                                                         .build()
+                                                 )
+                                             );
+                                 }
+                             
+                                 @POST
+                                 public Uni<Response> create(Book book) {
+                                     if (book.getId() != null) {
+                                         throw new WebApplicationException("error.badrequest.alreadyexist", Response.Status.BAD_REQUEST);
+                                     } else {
+                                         return service.save(book)
+                                                 .map(d -> Response
+                                                         .created(URI.create("/api/book/" + d.getId()))
+                                                         .entity(d)
+                                                         .build()
+                                                 );
+                                     }
+                                 }
+                             
+                                 @PUT
+                                 public Uni<Response> update(Book book) {
+                                     if (book.getId() == null) {
+                                         throw new WebApplicationException("error.badrequest.notexist", Response.Status.BAD_REQUEST);
+                                     } else {
+                                         return service.save(book)
+                                                 .map(d -> Response
+                                                         .ok(d)
+                                                         .build()
+                                                 );
+                                     }
+                                 }
+                             
+                                 @DELETE
+                                 @Path("/{id}")
+                                 public Uni<Response> delete(UUID id) {
+                                     return service.delete(id)
+                                             .map(aBoolean -> Response
+                                                     .accepted()
+                                                     .build()
+                                             );
+                                 }
+                             }
+                             """
                 );
     }
+
+    @Test
+    void testRestControllerITGeneration() {
+        String restController = generateRestControllerIT(Book.class);
+        assertThat(restController)
+                .isEqualTo("""
+                     package ch.bytecrowd.lazynerd.web.rest;
+                     
+                     import ch.bytecrowd.lazynerd.model.Book;
+                     import java.util.UUID;
+                     import ch.bytecrowd.lazynerd.repository.BookRepository;
+                     
+                     import io.netty.handler.codec.http.HttpResponseStatus;
+                     import io.quarkus.test.junit.QuarkusTest;
+                     import io.restassured.http.ContentType;
+                     import org.hamcrest.CoreMatchers;
+                     import org.hamcrest.MatcherAssert;
+                     import org.junit.jupiter.api.Test;
+                     
+                     import javax.inject.Inject;
+                     
+                     import static io.restassured.RestAssured.given;
+                     import static org.hamcrest.CoreMatchers.is;
+                     import static org.hamcrest.CoreMatchers.notNullValue;
+                     
+                     @QuarkusTest
+                     public class BookResourceIT {
+                     
+                         // TODO: set default values and remove default value for ID
+                             public static final UUID DEFAULT_ID = "AAAA";
+                             public static final String DEFAULT_TITLE = "AAAA";
+                             public static final List<Author> DEFAULT_AUTHORS = "AAAA";
+                             public static final Category DEFAULT_CATEGORY = "AAAA";
+                        \s
+                         // TODO: set updated values and remove updated value for ID
+                             public static final UUID UPDATED_ID = "BBBB";
+                             public static final String UPDATED_TITLE = "BBBB";
+                             public static final List<Author> UPDATED_AUTHORS = "BBBB";
+                             public static final Category UPDATED_CATEGORY = "BBBB";
+                        \s
+                         @Inject
+                         BookRepository repository;
+                     
+                         @Test
+                         public void testPostWithNotExistingShouldSaveAndReturnRecord() {
+                             Book book = createBook();
+                             given()
+                                     .body(book)
+                                     .contentType(ContentType.JSON)
+                                     .when().post("/api/book")
+                                     .then()
+                                     .statusCode(HttpResponseStatus.CREATED.code())
+                                     .body("id", notNullValue())
+                                     // TODO: remove default id matcher
+                                                     .body("id", is(DEFAULT_ID))
+                                                     .body("title", is(DEFAULT_TITLE))
+                                                     .body("authors", is(DEFAULT_AUTHORS))
+                                                     .body("category", is(DEFAULT_CATEGORY))
+                                                     ;
+                         }
+                     
+                         @Test
+                         public void testPostWithExistingShouldBeStatusBadRequest() {
+                             Book book = createBookAndPersist(repository);
+                             given()
+                                     .body(book)
+                                     .contentType(ContentType.JSON)
+                                     .when().post("/api/book")
+                                     .then()
+                                     .statusCode(HttpResponseStatus.BAD_REQUEST.code());
+                         }
+                     
+                         @Test
+                         public void testPutWithExistingShouldUpdateEndReturnRecord() {
+                             Book book = createBookAndPersist(repository);
+                             Book bookUpdated = createBook()
+                                     .id(book.getId())
+                                     // TODO: remove setter for default id
+                                                     .id(UPDATED_ID)
+                                                     .title(UPDATED_TITLE)
+                                                     .authors(UPDATED_AUTHORS)
+                                                     .category(UPDATED_CATEGORY)
+                                                     ;
+                     
+                             given()
+                                     .body(bookUpdated)
+                                     .contentType(ContentType.JSON)
+                                     .when().put("/api/book")
+                                     .then()
+                                     .statusCode(HttpResponseStatus.OK.code())
+                                     .body("id", is(book.getId().toString()))
+                                     // TODO: remove default id matcher
+                                                     .body("id", is(UPDATED_ID))
+                                                     .body("title", is(UPDATED_TITLE))
+                                                     .body("authors", is(UPDATED_AUTHORS))
+                                                     .body("category", is(UPDATED_CATEGORY))
+                                                     ;
+                         }
+                     
+                         @Test
+                         public void testPutWithNotExistingShouldStatusBeBadRequest() {
+                             Book book = createBook();
+                     
+                             given()
+                                     .body(book)
+                                     .contentType(ContentType.JSON)
+                                     .when().put("/api/book")
+                                     .then()
+                                     .statusCode(HttpResponseStatus.BAD_REQUEST.code());
+                         }
+                     
+                         @Test
+                         public void testFindAllShouldReturnAllRecords() {
+                             createBookAndPersist(repository);
+                             createBookAndPersist(repository);
+                             createBookAndPersist(repository);
+                             var count = repository.count().await().indefinitely();
+                     
+                             given()
+                                     .contentType(ContentType.JSON)
+                                     .when().get("/api/book")
+                                     .then()
+                                     .statusCode(HttpResponseStatus.OK.code())
+                                     .body("$.size()", is(count.intValue()));
+                         }
+                     
+                         @Test
+                         public void testFindAllWhenEmptyShouldStillReturnOkStatus() {
+                             repository.deleteAll().await().indefinitely();
+                     
+                             given()
+                                     .contentType(ContentType.JSON)
+                                     .when().get("/api/book")
+                                     .then()
+                                     .statusCode(HttpResponseStatus.OK.code())
+                                     .body("$.size()", is(0));
+                         }
+                     
+                         @Test
+                         public void testFindOneWithExistingIdShouldReturnCorrectRecord() {
+                             Book book = createBookAndPersist(repository);
+                     
+                             given()
+                                     .contentType(ContentType.JSON)
+                                     .when().get("/api/book/" + book.getId())
+                                     .then()
+                                     .statusCode(HttpResponseStatus.OK.code())
+                                     .body("id", is(book.getId().toString()))
+                                     // TODO: remove default id matcher
+                                                     .body("id", is(DEFAULT_ID))
+                                                     .body("title", is(DEFAULT_TITLE))
+                                                     .body("authors", is(DEFAULT_AUTHORS))
+                                                     .body("category", is(DEFAULT_CATEGORY))
+                                                     ;
+                         }
+                     
+                         @Test
+                         public void testFindOneWithNotExistingShouldBeStatusNotFound() {
+                     
+                             given()
+                                     .contentType(ContentType.JSON)
+                                     .when().get("/api/book/" + UUID.randomUUID())
+                                     .then()
+                                     .statusCode(HttpResponseStatus.NOT_FOUND.code());
+                         }
+                     
+                         @Test
+                         public void testDeleteWithExistingRecordShouldDelete() {
+                             Book book = createBookAndPersist(repository);
+                     
+                             given()
+                                     .contentType(ContentType.JSON)
+                                     .when().delete("/api/book/" + book.getId())
+                                     .then()
+                                     .statusCode(HttpResponseStatus.ACCEPTED.code());
+                     
+                             MatcherAssert.assertThat(
+                                     "should be deleted from the repository",
+                                     repository.findById(book.getId()).await().indefinitely(), CoreMatchers.notNullValue()
+                             );
+                         }
+                     
+                         @Test
+                         public void testDeleteWithNonExistingRecordShouldBeStatusAccepted() {
+                             given()
+                                     .contentType(ContentType.JSON)
+                                     .when().delete("/api/book/" + UUID.randomUUID())
+                                     .then()
+                                     .statusCode(HttpResponseStatus.ACCEPTED.code());
+                         }
+                     
+                         public static Book createBookAndPersist(BookRepository repository) {
+                             return repository.persistAndFlush(createBook()).await().indefinitely();
+                         }
+                     
+                         public static Book createBook() {
+                             return new Book()
+                                     // TODO: remove setter for default id
+                                                     .id(DEFAULT_ID)
+                                                     .title(DEFAULT_TITLE)
+                                                     .authors(DEFAULT_AUTHORS)
+                                                     .category(DEFAULT_CATEGORY)
+                                     ;
+                         }
+                     }
+                     """);
+    }
+
+
+    @Test
+    void testServiceTestGeneration() {
+        String restController = generateServiceTest(Book.class);
+        assertThat(restController)
+                .isEqualTo("""
+                        package ch.bytecrowd.lazynerd.service;
+                                                
+                        import ch.bytecrowd.lazynerd.model.Book;
+                        import java.util.UUID;
+                        import ch.bytecrowd.lazynerd.repository.BookRepository;
+                        import ch.bytecrowd.lazynerd.service.impl.BookServiceImpl;
+                        import io.smallrye.mutiny.Multi;
+                        import io.smallrye.mutiny.Uni;
+                        import io.smallrye.mutiny.helpers.test.UniAssertSubscriber;
+                        import org.hibernate.reactive.mutiny.Mutiny;
+                        import org.junit.jupiter.api.BeforeEach;
+                        import org.junit.jupiter.api.Test;
+                        import org.junit.jupiter.api.extension.ExtendWith;
+                        import org.mockito.Mock;
+                        import org.mockito.junit.jupiter.MockitoExtension;
+                                                
+                        import java.util.List;
+                        import java.util.Optional;
+                        import java.util.UUID;
+                                                
+                        import static org.hamcrest.MatcherAssert.assertThat;
+                        import static org.hamcrest.Matchers.hasSize;
+                        import static org.hamcrest.Matchers.is;
+                        import static org.mockito.Mockito.*;
+                                                
+                        @ExtendWith(MockitoExtension.class)
+                        class BookServiceTest {
+                                                
+                            @Mock
+                            BookRepository repository;
+                            BookService service;
+                                                
+                            @BeforeEach
+                            void init() {
+                                service = new BookServiceImpl(repository);
+                            }
+                                                
+                            @Test
+                            void testFindAll() {
+                                var itemsMocked = List.of(
+                                        mock(Book.class),
+                                        mock(Book.class),
+                                        mock(Book.class),
+                                        mock(Book.class),
+                                        mock(Book.class)
+                                );
+                                                
+                                when(repository.streamAll()).thenReturn(
+                                        Multi.createFrom()
+                                                .items(
+                                                        itemsMocked.stream()
+                                                )
+                                );
+                                                
+                                service.getAll()
+                                        .collect().asList()
+                                        .invoke(items -> assertThat(
+                                                        "the items count should be the same size as itemsMocked",
+                                                        items, hasSize(itemsMocked.size())
+                                                )
+                                        ).subscribe().withSubscriber(UniAssertSubscriber.create())
+                                        .assertCompleted();
+                                                
+                                verify(repository).streamAll();
+                                verifyNoMoreInteractions(repository);
+                            }
+                                                
+                            @Test
+                            void testFindOne() {
+                                UUID id = UUID.randomUUID();
+                                Book itemMock = mock(Book.class);
+                                when(itemMock.getId()).thenReturn(id);
+                                when(repository.findById(id)).thenReturn(
+                                        Uni.createFrom()
+                                                .item(itemMock)
+                                );
+                                                
+                                service.findById(id)
+                                        .invoke(item -> assertThat(
+                                                "the the optional should have a value present",
+                                                item.isPresent(), is(true))
+                                        ).map(Optional::get)
+                                        .invoke(item -> assertThat("the returned id should match the mocked id",
+                                                item.getId(), is(id))
+                                        ).subscribe().withSubscriber(UniAssertSubscriber.create())
+                                        .assertCompleted();
+                                                
+                                verify(repository).findById(id);
+                                verifyNoMoreInteractions(repository);
+                            }
+                                                
+                                                
+                            @Test
+                            void testSaveNew() {
+                                Book itemMock = mock(Book.class);
+                                when(repository.persist(itemMock)).thenReturn(
+                                        Uni.createFrom()
+                                                .item(itemMock)
+                                );
+                                                
+                                service.save(itemMock)
+                                        .invoke(item -> assertThat("the saved item should match the mocked item",
+                                                item, is(itemMock))
+                                        ).subscribe().withSubscriber(UniAssertSubscriber.create())
+                                        .assertCompleted();
+                                                
+                                verify(repository).persist(itemMock);
+                                verifyNoMoreInteractions(repository);
+                            }
+                                                
+                            @Test
+                            void testSaveExisting() {
+                                UUID id = UUID.randomUUID();
+                                Book itemMock = mock(Book.class);
+                                Mutiny.Session sessionMock = mock(Mutiny.Session.class);
+                                                
+                                when(itemMock.getId()).thenReturn(id);
+                                when(sessionMock.merge(itemMock))
+                                        .thenReturn(Uni.createFrom().item(itemMock));
+                                when(repository.getSession()).thenReturn(
+                                        Uni.createFrom().item(sessionMock)
+                                );
+                                                
+                                service.save(itemMock)
+                                        .invoke(item -> assertThat("the saved item should match the mocked item",
+                                                item.getId(), is(id))
+                                        ).subscribe().withSubscriber(UniAssertSubscriber.create())
+                                        .assertCompleted();
+                                                
+                                verify(repository).getSession();
+                                verify(sessionMock).merge(itemMock);
+                                verifyNoMoreInteractions(repository);
+                                verifyNoMoreInteractions(sessionMock);
+                            }
+                                                
+                            @Test
+                            void testDelete() {
+                                UUID id = UUID.randomUUID();
+                                when(repository.deleteById(id)).thenReturn(
+                                        Uni.createFrom()
+                                                .item(true)
+                                );
+                                                
+                                service.delete(id)
+                                        .subscribe().withSubscriber(UniAssertSubscriber.create())
+                                        .assertCompleted();
+                                                
+                                verify(repository).deleteById(id);
+                                verifyNoMoreInteractions(repository);
+                            }
+                        }
+                        """);
+    }
+
     public static String generateRepository(Class clazz) {
         return TEMPLATE_FILLER.fillUpTemplate(
                 Templates.QUARKUS_REPOSITORY,
@@ -439,6 +841,20 @@ class TemplateFillerTest {
     public static String generateRestController(Class clazz) {
         return TEMPLATE_FILLER.fillUpTemplate(
                 Templates.QUARKUS_REST_RESOURCE,
+                () -> ParamProvider.paramsFromEntity(clazz)
+        );
+    }
+
+    public static String generateRestControllerIT(Class clazz) {
+        return TEMPLATE_FILLER.fillUpTemplate(
+                Templates.QUARKUS_REST_RESOURCE_IT,
+                () -> ParamProvider.paramsFromEntity(clazz)
+        );
+    }
+
+    public static String generateServiceTest(Class clazz) {
+        return TEMPLATE_FILLER.fillUpTemplate(
+                Templates.QUARKUS_SERVICE_TEST,
                 () -> ParamProvider.paramsFromEntity(clazz)
         );
     }

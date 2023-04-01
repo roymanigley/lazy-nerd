@@ -2,6 +2,7 @@ package ch.bytecrowd.lazynerd;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Optional;
@@ -12,6 +13,27 @@ public final class ReflectionHelper {
 
     private ReflectionHelper() {
 
+    }
+
+    public static Type mapToWrapper(Type t) {
+        if (t.equals(int.class)) {
+            return Integer.class;
+        } else if (t.equals(byte.class)) {
+            return Byte.class;
+        } else if (t.equals(short.class)) {
+            return Short.class;
+        } else if (t.equals(long.class)) {
+            return Long.class;
+        } else if (t.equals(float.class)) {
+            return Float.class;
+        } else if (t.equals(double.class)) {
+            return Double.class;
+        } else if (t.equals(boolean.class)) {
+            return Boolean.class;
+        } else if (t.equals(char.class)) {
+            return Character.class;
+        }
+        return t;
     }
 
     public static HashMap<String, Function<Object, Object>> getFieldsMap(Class<?> clazz) {

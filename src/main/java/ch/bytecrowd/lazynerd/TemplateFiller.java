@@ -62,6 +62,8 @@ class LoopFiller {
                     var clazz = collection.iterator().next().getClass();
                     var builder = fillLoopTemplate(collection, stripedLoopTemplate, clazz);
                     template = mergeToMainTemplate(template, builder);
+                } else {
+                    template = template.replace(forLoop, "");
                 }
             } else {
                 if (paramProvider.provideParams().get(key) == null) {
@@ -98,6 +100,6 @@ class LoopFiller {
     }
 
     static private String mergeToMainTemplate(String template, StringBuilder builder) {
-        return template.replaceFirst("#forEach(((?!#end).|\n))+#end\s*\n?", builder.toString());
+        return template.replaceFirst("#forEach(((?!#end).|\n))*#end\s*\n?", builder.toString());
     }
 }
