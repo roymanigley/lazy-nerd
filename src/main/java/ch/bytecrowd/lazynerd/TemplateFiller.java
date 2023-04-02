@@ -24,21 +24,33 @@ public class TemplateFiller {
     }
 
     /**
-     * @param pathToFile
+     * @param sourceBasePath 'src/main/java' or 'src/test/java'
      * @param template
      * @param paramProvider
      * @throws IOException
      */
     public void fillUpTemplateAndWriteToFile(
-            String pathToFile,
+            String sourceBasePath,
             String template,
             ParamProvider paramProvider
     ) throws IOException {
-        var path = Path.of(pathToFile);
+        String generated = fillUpTemplate(template, paramProvider);
+
+        String sourceFileName = generated.split("(class|interface) ")[1].split("\s+")[0];
+
+
+        String sourceFilePath = generated.lines()
+                .findFirst()
+                .map(firstLine -> firstLine.replaceAll("package (.+);", "$1"))
+                .map(packageName -> packageName.replaceAll("\\.", "/"))
+                .map(packagePath -> packagePath + "/" + sourceFileName + ".java")
+                .orElse("");
+
+        var path = Path.of(sourceBasePath + "/" + sourceFilePath);
         path.getParent().toFile().mkdirs();
         Files.writeString(
                 path,
-                fillUpTemplate(template, paramProvider),
+                generated,
                 StandardOpenOption.WRITE, StandardOpenOption.CREATE
         );
     }

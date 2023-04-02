@@ -1,6 +1,5 @@
 package ch.bytecrowd.lazynerd;
 
-import javassist.NotFoundException;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -8,7 +7,12 @@ class UnitTestGeneratorTest {
 
     @Test
     void test() {
-        String generated = UnitTestGenerator.generate(DummyClass.class, "src/test/java", true);
+        String generated = new UnitTestGenerator.Builder()
+                .clazz(DummyClass.class)
+                .sourcePath("src/test/java")
+                .build()
+                .generate();
+
         Assertions.assertThat(
                 generated
         ).isNotBlank()

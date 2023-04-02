@@ -79,32 +79,34 @@ public static void main(String[] args){
         );
         
         // Generate to file
+        var baseDir = "src/main/java"
+
         filler.fillUpTemplateAndWriteToFile(
-            "/tmp/ch/bytecrowd/lazynerd/domain/" + clazz.getSimpleName() + ".java",
+            baseDir,
             Templates.GETTER_SETTER_EQUALS_AND_HASH_CODE,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
         
         filler.fillUpTemplateAndWriteToFile(
-            "/tmp/ch/bytecrowd/lazynerd/repository/" + clazz.getSimpleName() + "Repository.java",
+            baseDir,
             Templates.QUARKUS_REPOSITORY,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
 
         filler.fillUpTemplateAndWriteToFile(
-            "/tmp/ch/bytecrowd/lazynerd/service/" + clazz.getSimpleName() + "Service.java",
+            baseDir,
             Templates.QUARKUS_SERVICE,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
 
         filler.fillUpTemplateAndWriteToFile(
-            "/tmp/ch/bytecrowd/lazynerd/service/impl/" + clazz.getSimpleName() + "ServiceImpl.java",
+            baseDir,
             Templates.QUARKUS_SERVICE_IMPL,
             () -> ParamProvider.paramsFromEntity(clazz)
         );
 
         filler.fillUpTemplateAndWriteToFile(
-            "/tmp/ch/bytecrowd/lazynerd/web/rest/" + clazz.getSimpleName() + "Resource.java",
+            baseDir,
             Templates.QUARKUS_REST_RESOURCE,
             () -> ParamProvider.paramsFromEntity(clazz)
         );

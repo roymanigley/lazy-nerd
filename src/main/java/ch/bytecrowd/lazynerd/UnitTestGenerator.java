@@ -15,51 +15,64 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.utils.SourceRoot;
-import javassist.NotFoundException;
 
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public final class UnitTestGenerator {
+    private final Class clazz;
+    private final String methodRegex;
+    private final String sourcePath;
+    private final boolean generateTestsForIfStatements;
 
-    private UnitTestGenerator() {
+    public static class Builder {
+        private Class clazz;
+        private String methodRegex = "^.+";
+        private String sourcePath = "src/main/java";
+        private boolean generateTestsForIfStatements = true;
 
-    }
-
-    public static String getMethodName(Node node) {
-        Optional<Node> currentNode = node.getParentNode();
-        while (currentNode.isPresent()) {
-            if (currentNode.get() instanceof MethodDeclaration declaration) {
-                return declaration.getNameAsString();
-            }
-            currentNode = currentNode.get().getParentNode();
+        public Builder clazz(Class clazz) {
+            this.clazz = clazz;
+            return this;
         }
-        return "UNKNOWN_METHOD";
+
+        public Builder methodRegex(String methodRegex) {
+            this.methodRegex = methodRegex;
+            return this;
+        }
+
+        public Builder sourcePath(String sourcePath) {
+            this.sourcePath = sourcePath;
+            return this;
+        }
+
+        public Builder generateTestsForIfStatements(boolean generateTestsForIfStatements) {
+            this.generateTestsForIfStatements = generateTestsForIfStatements;
+            return this;
+        }
+
+        public UnitTestGenerator build() {
+            if (clazz == null) {
+                throw new IllegalArgumentException("clazz can not be null");
+            }
+            return new UnitTestGenerator(clazz, methodRegex, sourcePath, generateTestsForIfStatements);
+        }
     }
 
-    public static String generate(Class clazz) {
-        return generate(clazz, "src/main/java", true);
+    private UnitTestGenerator(Class clazz, String methodRegex, String sourcePath, boolean generateTestsForIfStatements) {
+        this.clazz = clazz;
+        this.methodRegex = methodRegex;
+        this.sourcePath = sourcePath;
+        this.generateTestsForIfStatements = generateTestsForIfStatements;
     }
 
-    public static String generateOnlyPermutatedMethodInvocation(Class clazz) {
-        return generate(clazz, "src/main/java", false);
-    }
-
-    public static String generate(
-            Class clazz,
-            String sourcePath,
-            boolean generateTestsForIfStatements
-    ) {
+    public String generate() {
         var sourceRoot = new SourceRoot(Paths.get(sourcePath));
         var parsed = sourceRoot.parse(
                 clazz.getPackageName(),
                 clazz.getSimpleName() + ".java"
         );
-
-        var nonPrivateMethods = parsed.findAll(MethodDeclaration.class).stream()
-                .filter(declaration -> !declaration.hasModifier(Modifier.Keyword.PRIVATE))
-                .toList();
 
         var builder = new StringBuilder();
 
@@ -80,6 +93,7 @@ public final class UnitTestGenerator {
         builder.append("@ExtendWith(MockitoExtension.class)\n");
         builder.append("class " + clazz.getSimpleName() + "Test {\n");
         builder.append("\n");
+        List<String> mocks = new ArrayList<>();
         List<ConstructorDeclaration> constructors = parsed.findAll(ConstructorDeclaration.class);
         constructors.stream()
                 .filter(constructorDeclaration -> !constructorDeclaration.hasModifier(Modifier.Keyword.PRIVATE))
@@ -95,8 +109,10 @@ public final class UnitTestGenerator {
                     } else {
                         builder.append("    @Mock\n");
                         builder.append("    " + parameter +";\n");
+                        mocks.add(parameter.getNameAsString());
                     }
                 });
+
         builder.append("\n");
 
         builder.append("    " + clazz.getSimpleName() + " target;\n");
@@ -118,7 +134,10 @@ public final class UnitTestGenerator {
         builder.append("    }\n");
         builder.append("\n");
 
-        nonPrivateMethods.forEach(method -> {
+        parsed.findAll(MethodDeclaration.class).stream()
+                .filter(declaration -> !declaration.hasModifier(Modifier.Keyword.PRIVATE))
+                .filter(declaration -> declaration.getNameAsString().matches(methodRegex))
+                .forEach(method -> {
 
             var methodName = method.getNameAsString();
             var parameters = method.getParameters();
@@ -128,19 +147,19 @@ public final class UnitTestGenerator {
                     "        " + generateMockedVariable(param)).collect(Collectors.joining("\n")
             );
 
-            builder.append(generateTestsForMethodInvocationWithPermutatedArguments(parameters, methodNamePascalCase, methodInvocation));
+            builder.append(generateTestsForMethodInvocationWithPermutatedArguments(parameters, methodNamePascalCase, methodInvocation, mocks));
 
             if (generateTestsForIfStatements) {
-                builder.append(generataTestsForIfStatements(parsed, methodName, methodNamePascalCase, methodInvocation, arguments));
-                builder.append(generataTestsForTernaryStatements(parsed, methodName, methodNamePascalCase, methodInvocation, arguments));
-                builder.append(geterateTestForSwitchCases(parsed, methodName, methodNamePascalCase, methodInvocation, arguments));
+                builder.append(generataTestsForIfStatements(parsed, methodName, methodNamePascalCase, methodInvocation, arguments, mocks));
+                builder.append(generataTestsForTernaryStatements(parsed, methodName, methodNamePascalCase, methodInvocation, arguments, mocks));
+                builder.append(geterateTestForSwitchCases(parsed, methodName, methodNamePascalCase, methodInvocation, arguments, mocks));
             }
         });
         builder.append("}\n");
         return builder.toString();
     }
 
-    private static String generateMockedVariable(Parameter param) {
+    private String generateMockedVariable(Parameter param) {
         Type type = getBoxedType(param);
         if (((ClassOrInterfaceType) type).isBoxedType()) {
             return  param + " = 42;";
@@ -150,7 +169,7 @@ public final class UnitTestGenerator {
         return param + " = mock(" + type.asString() + ".class);";
     }
 
-    private static Type getBoxedType(Parameter param) {
+    private Type getBoxedType(Parameter param) {
         var type = param.getType();
         if (type.isPrimitiveType()) {
             type = ((PrimitiveType) type).toBoxedType();
@@ -158,14 +177,14 @@ public final class UnitTestGenerator {
         return type;
     }
 
-    private static String getMethodInvocation(String methodName, NodeList<Parameter> parameters) {
+    private String getMethodInvocation(String methodName, NodeList<Parameter> parameters) {
         return "        var actual = target." + methodName + "(" + parameters.stream()
                 .map(Parameter::getNameAsString)
                 .collect(Collectors.joining(", "))
                 + ");";
     }
 
-    private static StringBuilder generateTestsForMethodInvocationWithPermutatedArguments(NodeList<Parameter> parameters, String methodNamePascalCase, String methodInvocation) {
+    private StringBuilder generateTestsForMethodInvocationWithPermutatedArguments(NodeList<Parameter> parameters, String methodNamePascalCase, String methodInvocation, List<String> mocks) {
         var builder = new StringBuilder();
         generatePermutations(parameters).forEach(p -> {
             builder.append("    @Test\n");
@@ -195,13 +214,16 @@ public final class UnitTestGenerator {
             builder.append("\n");
             builder.append("        // THEN\n");
             builder.append("        assertThat(actual).isNotNull();\n");
+            if (!mocks.isEmpty()) {
+                builder.append("verifyNoMoreInteractions(" + mocks.stream().collect(Collectors.joining(",")) + ");\n");
+            }
             builder.append("    }\n");
             builder.append("\n");
         });
         return builder;
     }
 
-    private static StringBuilder generataTestsForIfStatements(CompilationUnit parsed, String methodName, String methodNamePascalCase, String methodInvocation, String arguments) {
+    private StringBuilder generataTestsForIfStatements(CompilationUnit parsed, String methodName, String methodNamePascalCase, String methodInvocation, String arguments, List<String> mocks) {
         var builder = new StringBuilder();
         parsed.findAll(IfStmt.class).stream()
                 .filter(ifStmt -> methodName.equals(getMethodName(ifStmt)))
@@ -219,6 +241,9 @@ public final class UnitTestGenerator {
                     builder.append("\n");
                     builder.append("        // THEN\n");
                     builder.append("        assertThat(actual).isNotNull();\n");
+                    if (!mocks.isEmpty()) {
+                        builder.append("verifyNoMoreInteractions(" + mocks.stream().collect(Collectors.joining(",")) + ");\n");
+                    }
                     builder.append("    }\n");
                     builder.append("\n");
                     if (expression.hasElseBlock()) {
@@ -235,6 +260,9 @@ public final class UnitTestGenerator {
                         builder.append("\n");
                         builder.append("        // THEN\n");
                         builder.append("        assertThat(actual).isNotNull();\n");
+                        if (!mocks.isEmpty()) {
+                            builder.append("verifyNoMoreInteractions(" + mocks.stream().collect(Collectors.joining(",")) + ");\n");
+                        }
                         builder.append("    }\n");
                         builder.append("\n");
                     }
@@ -242,7 +270,7 @@ public final class UnitTestGenerator {
         return builder;
     }
 
-    private static StringBuilder generataTestsForTernaryStatements(CompilationUnit parsed, String methodName, String methodNamePascalCase, String methodInvocation, String arguments) {
+    private StringBuilder generataTestsForTernaryStatements(CompilationUnit parsed, String methodName, String methodNamePascalCase, String methodInvocation, String arguments, List<String> mocks) {
         var builder = new StringBuilder();
         parsed.findAll(ConditionalExpr.class).stream()
                 .filter(ifStmt -> methodName.equals(getMethodName(ifStmt)))
@@ -260,6 +288,9 @@ public final class UnitTestGenerator {
                     builder.append("\n");
                     builder.append("        // THEN\n");
                     builder.append("        assertThat(actual).isNotNull();\n");
+                    if (!mocks.isEmpty()) {
+                        builder.append("verifyNoMoreInteractions(" + mocks.stream().collect(Collectors.joining(",")) + ");\n");
+                    }
                     builder.append("    }\n");
                     builder.append("\n");
                     builder.append("    @Test\n");
@@ -275,13 +306,16 @@ public final class UnitTestGenerator {
                     builder.append("\n");
                     builder.append("        // THEN\n");
                     builder.append("        assertThat(actual).isNotNull();\n");
+                    if (!mocks.isEmpty()) {
+                        builder.append("verifyNoMoreInteractions(" + mocks.stream().collect(Collectors.joining(",")) + ");\n");
+                    }
                     builder.append("    }\n");
                     builder.append("\n");
                 });
         return builder;
     }
 
-    private static StringBuilder geterateTestForSwitchCases(CompilationUnit parsed, String methodName, String methodNamePascalCase, String methodInvocation, String arguments) {
+    private StringBuilder geterateTestForSwitchCases(CompilationUnit parsed, String methodName, String methodNamePascalCase, String methodInvocation, String arguments, List<String> mocks) {
         var builder = new StringBuilder();
         parsed.findAll(SwitchStmt.class).stream()
                 .filter(ifStmt -> methodName.equals(getMethodName(ifStmt)))
@@ -304,13 +338,27 @@ public final class UnitTestGenerator {
                     builder.append("\n");
                     builder.append("        // THEN\n");
                     builder.append("        assertThat(actual).isNotNull();\n");
+                    if (!mocks.isEmpty()) {
+                        builder.append("verifyNoMoreInteractions(" + mocks.stream().collect(Collectors.joining(",")) + ");\n");
+                    }
                     builder.append("    }\n");
                     builder.append("\n");
                 });
         return builder;
     }
 
-    private static List<String[]> generatePermutations(NodeList<Parameter> params) {
+    public String getMethodName(Node node) {
+        Optional<Node> currentNode = node.getParentNode();
+        while (currentNode.isPresent()) {
+            if (currentNode.get() instanceof MethodDeclaration declaration) {
+                return declaration.getNameAsString();
+            }
+            currentNode = currentNode.get().getParentNode();
+        }
+        return "UNKNOWN_METHOD";
+    }
+
+    private List<String[]> generatePermutations(NodeList<Parameter> params) {
         var result = new ArrayList<String[]>();
         int n = params.size();
         int permutations = 1 << n;
